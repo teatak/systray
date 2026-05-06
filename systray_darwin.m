@@ -387,11 +387,18 @@ void runInMainThread(SEL method, id object) {
                   waitUntilDone: YES];
 }
 
+// macOS standard menu bar icon size is the status bar thickness (22pt on
+// modern macOS), not the previously hard-coded 16pt. Using 16pt left tray
+// icons noticeably smaller than other menubar apps (Apple's own status
+// items, 1Password, Slack). Reading NSStatusBar.thickness dynamically
+// matches the convention used by Wails v3 and aligns with macOS HIG —
+// supply 22pt × 2x = 44px PNGs and they render 1:1 at retina.
 void setIcon(const char* iconBytes, int length, bool template) {
   NSData* buffer = [NSData dataWithBytes: iconBytes length:length];
   @autoreleasepool {
     NSImage *image = [[NSImage alloc] initWithData:buffer];
-    [image setSize:NSMakeSize(16, 16)];
+    CGFloat thickness = [[NSStatusBar systemStatusBar] thickness];
+    [image setSize:NSMakeSize(thickness, thickness)];
     image.template = template;
     runInMainThread(@selector(setIcon:), (id)image);
   }
@@ -401,7 +408,8 @@ void setMenuItemIcon(const char* iconBytes, int length, int menuId, bool templat
   NSData* buffer = [NSData dataWithBytes: iconBytes length:length];
   @autoreleasepool {
     NSImage *image = [[NSImage alloc] initWithData:buffer];
-    [image setSize:NSMakeSize(16, 16)];
+    CGFloat thickness = [[NSStatusBar systemStatusBar] thickness];
+    [image setSize:NSMakeSize(thickness, thickness)];
     image.template = template;
     NSNumber *mId = [NSNumber numberWithInt:menuId];
     runInMainThread(@selector(setMenuItemIcon:), @[image, (id)mId]);
