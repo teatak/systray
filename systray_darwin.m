@@ -292,27 +292,29 @@ NSMenuItem *find_menu_item(NSMenu *ourMenu, NSNumber *menuId) {
   // popUpMenuPositioningItem(atLocation:) 在多屏垂直排列(屏幕上下叠)
   // 时触发 macOS known bug FB7456388:menu 在副屏上 popup 时位置算错,
   // 顶部 items 被挤出屏幕,菜单顶部出现 scroll-up 箭头,部分 items 被
-  // 隐藏需要手动滚动才能看到。横向排列没问题,Apple 至少 macOS Catalina
-  // 起就有这个 bug 没 fix。https://developer.apple.com/forums/thread/126072
+  // 隐藏。横向排列没问题。https://developer.apple.com/forums/thread/126072
   //
-  // popUpContextMenu:withEvent:forView: 走 event 坐标系,event 自带正确
-  // 屏幕信息(triggered click 来自哪个屏 → 在哪个屏 popup),macOS 自动
-  // 算屏幕 bounds + 可用空间,比手动 atLocation 更鲁棒。垂直多屏不出问题。
+  // popUpContextMenu:withEvent: 不踩 vertical bug 但是 context menu 风格
+  // (在 cursor 周围弹),不是 status item 下方,体感不对。
   //
-  // 只在没 currentEvent 时(programmatic trigger,例如 keyboard shortcut)
-  // 退回到原 popUpMenuPositioningItem 保 backwards compatible。
-  self->statusItem.button.highlighted = YES;
-  NSEvent *currentEvent = [NSApp currentEvent];
-  if (currentEvent != nil) {
-    [NSMenu popUpContextMenu:self->menu
-                   withEvent:currentEvent
-                     forView:self->statusItem.button];
-  } else {
-    [self->menu popUpMenuPositioningItem:nil
-                              atLocation:NSMakePoint(0, 0)
-                                  inView:self->statusItem.button];
+  // Apple 官方推荐(详见上述 forum 链接):temporary 设 statusItem.menu
+  // 然后 performClick — macOS 走标准 menu bar status item popup 路径,
+  // 自动按 button 下方位置弹,自动处理 multi-monitor / notch / fullscreen
+  // 边界。menuDidClose 时把 statusItem.menu 清回 nil 让 left/right click
+  // 区分逻辑(NSEvent monitor + RightClickDetector)继续工作。
+  self->statusItem.menu = self->menu;
+  [self->statusItem.button performClick:nil];
+}
+
+- (void)menuDidClose:(NSMenu *)menu
+{
+  // 配合 show_menu 的 statusItem.menu temporary 绑定:menu 关闭后清回 nil,
+  // 让 fork 的 left/right click 拦截路径(NSEvent local monitor +
+  // RightClickDetector)继续生效 — 否则 macOS 默认 click handler 会接管,
+  // fork 的 systray_left_click / systray_right_click 不再触发。
+  if (menu == self->menu) {
+    self->statusItem.menu = nil;
   }
-  self->statusItem.button.highlighted = NO;
 }
 
 - (void) show_menu_item:(NSNumber*) menuId
